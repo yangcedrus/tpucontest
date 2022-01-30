@@ -8,7 +8,7 @@
 #ifdef USING_CMODEL
 #define MAXIT (1)
 #else
-#define MAXIT (100)
+#define MAXIT (1)
 #endif
 typedef struct {
     int N, C, H, W;
@@ -36,9 +36,15 @@ static inline void softmax_reference(float *output, const float *input, const pa
 }
 
 int softmax(bm_handle_t &handle, param_t &param, const char *device_func_name) {
-    std::mt19937 rng;
-    rng.seed(std::random_device()());
-    std::uniform_real_distribution<float> dist_value{-5.f, 5.f};
+    static int case_no = 0;
+    std::string i_path = "./soft/case"+std::to_string(case_no)+"_i.dat";
+    std::string o_path = "./soft/case"+std::to_string(case_no)+"_o.dat";
+    FILE* fp_i = fopen(i_path.c_str(),"rb");
+    FILE* fp_o = fopen(o_path.c_str(),"rb");
+
+//    std::mt19937 rng;
+//    rng.seed(std::random_device()());
+//    std::uniform_real_distribution<float> dist_value{-5.f, 5.f};
     float *output_host = nullptr, *input_host = nullptr, *output_ref = nullptr;
     long long len = (long long)param.N * param.C * param.H * param.W;
     // alloc device memory
@@ -52,10 +58,14 @@ int softmax(bm_handle_t &handle, param_t &param, const char *device_func_name) {
     output_ref = new float[len];
     input_host = new float[len];
     // random input and kernel values
-    for (int i = 0; i < len; ++i)
-        input_host[i] = dist_value(rng);
-    // reference
-    softmax_reference(output_ref, input_host, param);
+//    for (int i = 0; i < len; ++i)
+//        input_host[i] = dist_value(rng);
+//    // reference
+//    softmax_reference(output_ref, input_host, param);
+
+    fread(input_host,sizeof(float),len,fp_i);
+    fread(output_ref,sizeof(float),len,fp_o);
+
     // copy input from host to device
     BMLIB_SAFE_CALL(bm_memcpy_s2d(handle, input_dev, input_host));
     // launch kernel function
@@ -84,6 +94,15 @@ int softmax(bm_handle_t &handle, param_t &param, const char *device_func_name) {
         res = std::round(elapsed_time / (double)MAXIT);
         std::cout << "elapsed time: " << res << "(us)" << std::endl;
     }
+    if(fp_i!=nullptr){
+        fclose(fp_i);
+	fp_i = nullptr;
+    }
+    if(fp_o!=nullptr){
+        fclose(fp_o);
+	fp_o = nullptr;
+    }
+    case_no++;
     // free
     bm_free_device(handle, output_dev);
     bm_free_device(handle, input_dev);

@@ -9,7 +9,7 @@
 #ifdef USING_CMODEL
 #define MAXIT (1)
 #else
-#define MAXIT (100)
+#define MAXIT (1)
 #endif
 typedef struct {
     int left_rows, left_cols, right_cols;
@@ -33,9 +33,16 @@ static inline void matmul_reference(float *output, const float *left, const floa
 }
 
 int matmul(bm_handle_t &handle, param_t &param, const char *device_func_name) {
-    std::mt19937 rng;
-    rng.seed(std::random_device()());
-    std::uniform_real_distribution<float> dist_value{-1.f, 1.f};
+    static int case_no = 0;
+    std::string i_path = "./mat/case"+std::to_string(case_no)+"_i.dat";
+    std::string k_path = "./mat/case"+std::to_string(case_no)+"_k.dat";
+    std::string o_path = "./mat/case"+std::to_string(case_no)+"_o.dat";
+    FILE* fp_i = fopen(i_path.c_str(),"rb");
+    FILE* fp_k = fopen(k_path.c_str(),"rb");
+    FILE* fp_o = fopen(o_path.c_str(),"rb");
+//    std::mt19937 rng;
+//    rng.seed(std::random_device()());
+//    std::uniform_real_distribution<float> dist_value{-1.f, 1.f};
     float *output_host = nullptr, *left_host = nullptr, *right_host = nullptr, *output_ref = nullptr;
     int output_len = param.left_rows * param.right_cols;
     int left_len = param.left_rows * param.left_cols;
@@ -54,12 +61,17 @@ int matmul(bm_handle_t &handle, param_t &param, const char *device_func_name) {
     left_host = new float[left_len];
     right_host = new float[right_len];
     // random left matrix and right matrix values
-    for (int i = 0; i < left_len; ++i)
-        left_host[i] = dist_value(rng);
-    for (int i = 0; i < right_len; ++i)
-        right_host[i] = dist_value(rng);
-    // reference
-    matmul_reference(output_ref, left_host, right_host, param);
+//    for (int i = 0; i < left_len; ++i)
+//        left_host[i] = dist_value(rng);
+//    for (int i = 0; i < right_len; ++i)
+//        right_host[i] = dist_value(rng);
+//    // reference
+//    matmul_reference(output_ref, left_host, right_host, param);
+
+    fread(left_host,sizeof(float),left_len,fp_i);
+    fread(right_host,sizeof(float),right_len,fp_k);
+    fread(output_ref,sizeof(float),output_len,fp_o);
+
     // copy left matrix and right matrix from host to device
     BMLIB_SAFE_CALL(bm_memcpy_s2d(handle, left_dev, left_host));
     BMLIB_SAFE_CALL(bm_memcpy_s2d(handle, right_dev, right_host));
@@ -89,6 +101,19 @@ int matmul(bm_handle_t &handle, param_t &param, const char *device_func_name) {
         res = std::round(elapsed_time / (double)MAXIT);
         std::cout << "elapsed time: " << res << "(us)" << std::endl;
     }
+    if(fp_i!=nullptr){
+        fclose(fp_i);
+	fp_i = nullptr;
+    }
+    if(fp_k!=nullptr){
+        fclose(fp_k);
+	fp_k = nullptr;
+    }
+    if(fp_o!=nullptr){
+        fclose(fp_o);
+	fp_o = nullptr;
+    }
+    case_no++;
     // free
     bm_free_device(handle, output_dev);
     bm_free_device(handle, left_dev);
@@ -104,15 +129,6 @@ int main() {
     bm_handle_t handle;
     // Initialize.
     BMLIB_SAFE_CALL(bm_dev_request(&handle, 0));
-    // demo
-    param_t param;
-    param.left_rows = 100;
-    param.left_cols = 200;
-    param.right_cols = 150;
-    if (matmul(handle, param, "matmul_demo") >= 0)
-        std::cout << "matmul_demo pass" << std::endl;
-    else
-        std::cout << "matmul_demo fail" << std::endl;
     ////////////////////////////////////////////////////////////////////////
     /// CONTEST CASES
     /// ////////////////////////////////////////////////////////////////////
@@ -143,6 +159,15 @@ int main() {
         results[i] = res;
     }
     (void)(results);
+    // demo
+    param_t param;
+    param.left_rows = 100;
+    param.left_cols = 200;
+    param.right_cols = 150;
+    if (matmul(handle, param, "matmul_demo") >= 0)
+        std::cout << "matmul_demo pass" << std::endl;
+    else
+        std::cout << "matmul_demo fail" << std::endl;
     // Deinitialize.
     bm_dev_free(handle);
     return 0;
