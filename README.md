@@ -40,7 +40,7 @@
 ![图片说明](https://github.com/sophon-ai-algo/bm1684contest/blob/main/pic/contact_us.jpg)
   
 ## Best result:
-* svn update time: Fri Feb 11 08:56:42 CST 2022
+* svn update time: "Mon
 * conv2d :  
 (case0:none) ,(case1:none) ,(case2:none) ,(case3:none) ,(case4:none) ,(case5:none) ,(case6:none) ,(case7:none) ,(case8:none) ,(case9:none) ,(case10:none) ,(case11:none) ,(case12:none) ,(case13:none) ,(case14:none) 
 * depthwise :  
