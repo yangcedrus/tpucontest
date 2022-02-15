@@ -40,12 +40,12 @@
 ![图片说明](https://github.com/sophon-ai-algo/bm1684contest/blob/main/pic/contact_us.jpg)
   
 ## Best result:
-* svn update time: "Mon Feb 14 09:59:04 CST 2022"
+* svn update time: "Tue
 * conv2d :  
 (case0:none) ,(case1:none) ,(case2:none) ,(case3:none) ,(case4:none) ,(case5:none) ,(case6:none) ,(case7:none) ,(case8:none) ,(case9:none) ,(case10:none) ,(case11:none) ,(case12:none) ,(case13:none) ,(case14:none) 
 * depthwise :  
 (case0:none) ,(case1:none) ,(case2:none) ,(case3:none) ,(case4:none) ,(case5:none) ,(case6:none) ,(case7:none) ,(case8:none) ,(case9:none) 
 * matmul :  
-(case0:2280779) ,(case1:602) ,(case2:1159947) ,(case3:6441) ,(case4:653) ,(case5:421504) ,(case6:763) ,(case7:2974) ,(case8:2775) ,(case9:4361) ,(case10:1824) ,(case11:6858) ,(case12:933) ,(case13:4277) ,(case14:203521) 
+(case0:2281671) ,(case1:629) ,(case2:1160421) ,(case3:6485) ,(case4:652) ,(case5:421671) ,(case6:757) ,(case7:2964) ,(case8:2761) ,(case9:4329) ,(case10:1826) ,(case11:6846) ,(case12:931) ,(case13:4289) ,(case14:203489) 
 * softmax :  
-(case0:none) ,(case1:none) ,(case2:none) ,(case3:none) ,(case4:none) 
+(case0:7628) ,(case1:6666) ,(case2:137008) ,(case3:2099053) ,(case4:969546) 
