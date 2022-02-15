@@ -1,15 +1,14 @@
 # 参加算能TPU编程大赛赢取大奖
 ## Best result:
-* svn update at: "Tue Feb 15 09:50:09 CST 2022"
-* Best score is 90
+* svn update at: "Tue
 * conv2d :  
 (case0:none) ,(case1:none) ,(case2:none) ,(case3:none) ,(case4:none) ,(case5:none) ,(case6:none) ,(case7:none) ,(case8:none) ,(case9:none) ,(case10:none) ,(case11:none) ,(case12:none) ,(case13:none) ,(case14:none) 
 * depthwise :  
-(case0:none) ,(case1:none) ,(case2:none) ,(case3:none) ,(case4:none) ,(case5:none) ,(case6:none) ,(case7:none) ,(case8:none) ,(case9:none) 
+(case0:1126) ,(case1:1385) ,(case2:8153) ,(case3:2062) ,(case4:1387) ,(case5:452) ,(case6:488) ,(case7:309) ,(case8:1190) ,(case9:3345) 
 * matmul :  
-(case0:2281671) ,(case1:629) ,(case2:1160421) ,(case3:6485) ,(case4:652) ,(case5:421671) ,(case6:757) ,(case7:2964) ,(case8:2761) ,(case9:4329) ,(case10:1826) ,(case11:6846) ,(case12:931) ,(case13:4289) ,(case14:203489) 
+(case0:2280952) ,(case1:602) ,(case2:1162042) ,(case3:6529) ,(case4:653) ,(case5:421277) ,(case6:757) ,(case7:2964) ,(case8:2772) ,(case9:4365) ,(case10:1823) ,(case11:6859) ,(case12:926) ,(case13:4299) ,(case14:203516) 
 * softmax :  
-(case0:7628) ,(case1:6666) ,(case2:137008) ,(case3:2099053) ,(case4:969546) 
+(case0:7626) ,(case1:6686) ,(case2:137015) ,(case3:2099117) ,(case4:969543) 
 
 ## 竞赛说明
 * 参赛者报名后，使用算能AI芯片指令集对Conv2d、Depthwise2d、Matmul、Softmax算子进行编程，在保证正确性的前提下，我们对参赛者提交代码的性能进行排名，奖励排名靠前的团队或个人。
@@ -50,5 +49,3 @@
 * okkernel/device/*demo.c中的代码只使用了1块local memory,想把tensor切分到不同的tpu可以参考okkernel/device/ok_device_max_pool.c或okkernel/device/ok_device_avg_pool.c
 ## 联系我们
 ![图片说明](https://github.com/sophon-ai-algo/bm1684contest/blob/main/pic/contact_us.jpg)
-  
-
