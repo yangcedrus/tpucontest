@@ -1,4 +1,16 @@
 # 参加算能TPU编程大赛赢取大奖
+## Best result:
+* svn update at: "Tue Feb 15 09:50:09 CST 2022"
+* Best score is 90
+* conv2d :  
+(case0:none) ,(case1:none) ,(case2:none) ,(case3:none) ,(case4:none) ,(case5:none) ,(case6:none) ,(case7:none) ,(case8:none) ,(case9:none) ,(case10:none) ,(case11:none) ,(case12:none) ,(case13:none) ,(case14:none) 
+* depthwise :  
+(case0:none) ,(case1:none) ,(case2:none) ,(case3:none) ,(case4:none) ,(case5:none) ,(case6:none) ,(case7:none) ,(case8:none) ,(case9:none) 
+* matmul :  
+(case0:2281671) ,(case1:629) ,(case2:1160421) ,(case3:6485) ,(case4:652) ,(case5:421671) ,(case6:757) ,(case7:2964) ,(case8:2761) ,(case9:4329) ,(case10:1826) ,(case11:6846) ,(case12:931) ,(case13:4289) ,(case14:203489) 
+* softmax :  
+(case0:7628) ,(case1:6666) ,(case2:137008) ,(case3:2099053) ,(case4:969546) 
+
 ## 竞赛说明
 * 参赛者报名后，使用算能AI芯片指令集对Conv2d、Depthwise2d、Matmul、Softmax算子进行编程，在保证正确性的前提下，我们对参赛者提交代码的性能进行排名，奖励排名靠前的团队或个人。
 * 参赛者只需完成okkernel/device下的ok_device_conv2d_contest.c ok_device_depthwise_contest.c ok_device_matmul_contest.c ok_device_softmax_contest.c 中TODO部分的代码，将此4个文件提交至svn(svn地址和密码在参赛者报名成功后会发送至邮箱)，我们对参赛者提交代码的性能进行排名，奖励排名靠前的团队或个人。
@@ -39,14 +51,4 @@
 ## 联系我们
 ![图片说明](https://github.com/sophon-ai-algo/bm1684contest/blob/main/pic/contact_us.jpg)
   
-## Best result:
-* svn update at: "Tue Feb 15 09:50:09 CST 2022"
-* Best score is 90
-* conv2d :  
-(case0:none) ,(case1:none) ,(case2:none) ,(case3:none) ,(case4:none) ,(case5:none) ,(case6:none) ,(case7:none) ,(case8:none) ,(case9:none) ,(case10:none) ,(case11:none) ,(case12:none) ,(case13:none) ,(case14:none) 
-* depthwise :  
-(case0:none) ,(case1:none) ,(case2:none) ,(case3:none) ,(case4:none) ,(case5:none) ,(case6:none) ,(case7:none) ,(case8:none) ,(case9:none) 
-* matmul :  
-(case0:2281671) ,(case1:629) ,(case2:1160421) ,(case3:6485) ,(case4:652) ,(case5:421671) ,(case6:757) ,(case7:2964) ,(case8:2761) ,(case9:4329) ,(case10:1826) ,(case11:6846) ,(case12:931) ,(case13:4289) ,(case14:203489) 
-* softmax :  
-(case0:7628) ,(case1:6666) ,(case2:137008) ,(case3:2099053) ,(case4:969546) 
+
