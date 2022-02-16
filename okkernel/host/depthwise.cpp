@@ -8,7 +8,7 @@
 #ifdef USING_CMODEL
 #define MAXIT (1)
 #else
-#define MAXIT (1)
+#define MAXIT (100)
 #endif
 typedef struct {
     int N, C, H, W;
@@ -50,16 +50,9 @@ static inline void depthwise_reference(float *output, const float *input, const 
 }
 
 int depthwise(bm_handle_t &handle, param_t &param, const char *device_func_name) {
-    static int case_no = 0;
-    std::string i_path = "./dep/case"+std::to_string(case_no)+"_i.dat";
-    std::string k_path = "./dep/case"+std::to_string(case_no)+"_k.dat";
-    std::string o_path = "./dep/case"+std::to_string(case_no)+"_o.dat";
-    FILE* fp_i = fopen(i_path.c_str(),"rb");
-    FILE* fp_k = fopen(k_path.c_str(),"rb");
-    FILE* fp_o = fopen(o_path.c_str(),"rb");
-//    std::mt19937 rng;
-//    rng.seed(std::random_device()());
-//    std::uniform_real_distribution<float> dist_value{-1.f, 1.f};
+    std::mt19937 rng;
+    rng.seed(std::random_device()());
+    std::uniform_real_distribution<float> dist_value{-1.f, 1.f};
     float *output_host = nullptr, *input_host = nullptr, *kernel_host = nullptr, *output_ref = nullptr;
     const int kernel_h_ext = (param.kernel_h - 1) * param.dilation_h + 1;
     const int kernel_w_ext = (param.kernel_w - 1) * param.dilation_w + 1;
@@ -82,17 +75,12 @@ int depthwise(bm_handle_t &handle, param_t &param, const char *device_func_name)
     input_host = new float[input_len];
     kernel_host = new float[kernel_len];
     // random input and kernel values
-//    for (int i = 0; i < input_len; ++i)
-//        input_host[i] = dist_value(rng);
-//    for (int i = 0; i < kernel_len; ++i)
-//        kernel_host[i] = dist_value(rng);
-
-    fread(input_host,sizeof(float),input_len,fp_i);
-    fread(kernel_host,sizeof(float),kernel_len,fp_k);
+    for (int i = 0; i < input_len; ++i)
+        input_host[i] = dist_value(rng);
+    for (int i = 0; i < kernel_len; ++i)
+        kernel_host[i] = dist_value(rng);
     // reference
-//    depthwise_reference(output_ref, input_host, kernel_host, param);
-    fread(output_ref,sizeof(float),output_len,fp_o);
-
+    depthwise_reference(output_ref, input_host, kernel_host, param);
     // copy input and kernel from host to device
     BMLIB_SAFE_CALL(bm_memcpy_s2d(handle, input_dev, input_host));
     BMLIB_SAFE_CALL(bm_memcpy_s2d(handle, kernel_dev, kernel_host));
@@ -122,19 +110,6 @@ int depthwise(bm_handle_t &handle, param_t &param, const char *device_func_name)
         res = std::round(elapsed_time / (double)MAXIT);
         std::cout << "elapsed time: " << res << "(us)" << std::endl;
     }
-    if(fp_i!=nullptr){
-        fclose(fp_i);
-	fp_i = nullptr;
-    }
-    if(fp_k!=nullptr){
-        fclose(fp_k);
-	fp_k = nullptr;
-    }
-    if(fp_o!=nullptr){
-        fclose(fp_o);
-	fp_o = nullptr;
-    }
-    case_no++;
     // free
     bm_free_device(handle, output_dev);
     bm_free_device(handle, input_dev);
@@ -150,6 +125,26 @@ int main() {
     bm_handle_t handle;
     // initialize
     BMLIB_SAFE_CALL(bm_dev_request(&handle, 0));
+    // demo
+    param_t param;
+    param.N = 4;
+    param.C = 64;
+    param.W = 16;
+    param.H = 16;
+    param.kernel_h = 3;
+    param.kernel_w = 3;
+    param.stride_h = 2;
+    param.stride_w = 2;
+    param.dilation_h = 2;
+    param.dilation_w = 2;
+    param.pad_top = 1;
+    param.pad_bottom = 1;
+    param.pad_left = 1;
+    param.pad_right = 1;
+    if (depthwise(handle, param, "depthwise_demo") >= 0)
+        std::cout << "depthwise_demo pass" << std::endl;
+    else
+        std::cout << "depthwise_demo fail" << std::endl;
     ////////////////////////////////////////////////////////////////////////
     /// CONTEST CASES
     /// ////////////////////////////////////////////////////////////////////
@@ -175,26 +170,6 @@ int main() {
         results[i] = res;
     }
     (void)(results);
-    // demo
-    param_t param;
-    param.N = 4;
-    param.C = 64;
-    param.W = 16;
-    param.H = 16;
-    param.kernel_h = 3;
-    param.kernel_w = 3;
-    param.stride_h = 2;
-    param.stride_w = 2;
-    param.dilation_h = 2;
-    param.dilation_w = 2;
-    param.pad_top = 1;
-    param.pad_bottom = 1;
-    param.pad_left = 1;
-    param.pad_right = 1;
-    if (depthwise(handle, param, "depthwise_demo") >= 0)
-        std::cout << "depthwise_demo pass" << std::endl;
-    else
-        std::cout << "depthwise_demo fail" << std::endl;
     // deinitialize
     bm_dev_free(handle);
     return 0;
