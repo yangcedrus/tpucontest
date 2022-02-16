@@ -1,4 +1,5 @@
-./okkernel/build/
-./okkernel/include/
-
-README.md
+*.d
+*.o
+build/
+*.mk
+*.sh

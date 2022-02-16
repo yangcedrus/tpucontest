@@ -20,4 +20,4 @@ fi
 
 export CROSS_TOOLCHAINS=`pwd`
 echo "export CROSS_TOOLCHAINS=$CROSS_TOOLCHAINS"
-popd>>/dev/null
+popd >>/dev/null

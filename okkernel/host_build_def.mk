@@ -1,4 +1,4 @@
-CROSS_TOOLCHAINS ?= ../../../bm_prebuilt_toolchains
+CROSS_TOOLCHAINS ?= /home/tpucontest/lib
 ifeq ($(USING_CMODEL)$(HOST_ARCH),0aarch64)
 HOST_CFLAGS          = -Wall -Werror -Wno-error=deprecated-declarations $(CONFIG_FLAGS) \
  -ffunction-sections -fdata-sections -ffp-contract=off\

@@ -1,4 +1,4 @@
-CROSS_TOOLCHAINS ?= ../../../bm_prebuilt_toolchains
+CROSS_TOOLCHAINS ?= /home/tpucontest/lib
 ARM_OPTFLAGS := \
 	-std=gnu99 \
 	-Os \
