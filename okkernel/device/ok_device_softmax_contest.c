@@ -42,39 +42,32 @@ void softmax_contest(const void *args) {
 
     // cal sum(exp(X))
     x32 C = {1.0};
-    dim4 kernel_shape = {.n=1,.c=param->C,.h=1,.w=param->C};
-    okk_bdc_32bit_set_C(output_addr, C, &kernel_shape, NULL);
+    // dim4 kernel_shape = {.n=1,.c=param->C,.h=1,.w=param->C*2};
+    // okk_bdc_32bit_set_C(output_addr, C, &kernel_shape, NULL);
 
-    dim4 kernel_shape_2IC = {.n=(param->C + 1) / 2, .c=param->C, .h=1, .w=1};
+    dim4 kernel_shape = {.n=(param->C + 1) / 2, .c=param->C, .h=1, .w=2};
+    dim4 kernel_stride;
+    okk_compact_stride(&kernel_stride, 0, &kernel_shape);
+    okk_bdc_32bit_set_C(output_addr, C, &kernel_shape, &kernel_stride);
+    // OKKERNEL_LOG("kernel shape is [%d,%d,%d,%d]", kernel_shape_2IC.n, kernel_shape_2IC.c, kernel_shape_2IC.h, kernel_shape_2IC.w);
+    // OKKERNEL_LOG("kernel stride is [%d,%d,%d,%d]", kernel_stride_2IC.n, kernel_stride_2IC.c, kernel_stride_2IC.h, kernel_stride_2IC.w);
+
+    dim4 kernel_shape_2IC = {.n = (param->C + 1) / 2, .c = param->C, .h = 1, .w = 1};
     dim4 kernel_stride_2IC;
     okk_compact_stride(&kernel_stride_2IC, 0, &kernel_shape_2IC);
-    // OKKERNEL_LOG("kernel stride is [%d,%d,%d,%d]", kernel_stride_2IC.n, kernel_stride_2IC.c, kernel_stride_2IC.h, kernel_stride_2IC.w);
     okk_bdc_conv2d(input_addr, exp_addr, output_addr, NULL, &shape, param->C, 1, 1, &stride, &kernel_stride_2IC, false, false, NULL, NULL, NULL);
 
-    // broadcast exp(x)
-    // dim4 broadcast_shape = {.n=1, .c=1, .h=param->H, .w=param->W};
-    // dim4 broadcast_stride;
-    // okk_128_byte_aligned_stride_for_32bit(&broadcast_stride, 0, &broadcast_shape);
-    // broadcast_shape.c = 1;
-    // OKKERNEL_LOG("start_addr: %d", okk_local_mem_size_per_npu());
-    // for(int i=1; i<param->C; i++)
-    // {
-    //     local_addr_t temp_addr = input_addr + (i/64) * shape.n * stride.n * sizeof(float) + (i%64) * okk_local_mem_size_per_npu();
-    //     OKKERNEL_LOG("temp_addr: %d", temp_addr);
-    //     okk_bdc_32bit_cpy(temp_addr, input_addr, &broadcast_shape, &broadcast_stride, &broadcast_stride);
-    // }
-
     // div exp(x) by sum
-    dim4 broadcast_stride = {0,0,0,0};
     // OKKERNEL_LOG("stride is [%d,%d,%d,%d]", stride.n, stride.c, stride.h, stride.w);
     // OKKERNEL_LOG("broadcast_stride is [%d,%d,%d,%d]", broadcast_stride.n, broadcast_stride.c, broadcast_stride.h, broadcast_stride.w);
-    okk_bdc_div(output_addr, exp_addr, input_addr, &shape, &stride, &stride, &broadcast_stride);
+    okk_bdc_div(output_addr, exp_addr, input_addr, &shape, &stride, &stride, &stride);
 
     okk_gdma_32bit_cpy_L2S(param->output_addr, output_addr, &shape, NULL, NULL);
 
     // dim4 outshape={.n=1,.c=1,.h=1,.w=param->C};
     // dim4 outstride={.n=2,.c=2,.h=2,.w=1};
-    // okk_gdma_32bit_cpy_L2S(param->output_addr, output_addr, &outshape, NULL, NULL);
+    // kernel_shape_2IC.w=1;
+    // okk_gdma_32bit_cpy_L2S(param->output_addr, input_addr, &kernel_shape_2IC, NULL, &kernel_stride_2IC);
     
     okk_poll();
 }
