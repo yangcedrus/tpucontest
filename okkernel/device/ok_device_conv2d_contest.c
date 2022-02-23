@@ -41,31 +41,115 @@ void conv2d_contest(const void *args) {
     dim4 system_input_stride = {.n=input_shape.c*input_shape.h*input_shape.w, .c=input_shape.h*input_shape.w, .h=input_shape.w, .w=1};
     dim4 system_output_stride = {.n=output_shape.c*output_shape.h*output_shape.w, .c=output_shape.h*output_shape.w, .h=output_shape.w, .w=1};
 
+    OKKERNEL_LOG("kernel shape:[%d, %d, %d, %d], stride:[%d, %d, %d, %d]\n", kernel_shape.n, kernel_shape.c, kernel_shape.h, kernel_shape.w, kernel_stride.n, kernel_stride.c, kernel_stride.h, kernel_stride.w);
+
+    long kernel_size = kernel_shape.n * kernel_stride.n * (int)sizeof(float);
+
+    OKKERNEL_LOG("kernel size:%d\n", kernel_size);
+
+    // cal max N
+    int max_N = (LOCAL_MEM_SIZE - kernel_size) / ((input_stride.n + output_stride.n) * sizeof(float));
+
+    // max_N = MIN(max_N, param->N);
+
+    if(max_N > 0)
+    {
+        OKKERNEL_LOG("can be split by N, max N:%d\n", max_N);
+
+        local_addr_t input_addr, kernel_addr, output_addr;
+
+        output_addr = 0;
+        input_addr = output_addr + max_N * output_stride.n * sizeof(float);
+        kernel_addr = input_addr + max_N * input_stride.n * sizeof(float);
+
+        OKKERNEL_LOG("ouput_addr:%d, input_addr:%d, kernel_addr:%d, final size:%d, total size:%d\n", output_addr, input_addr, kernel_addr, kernel_addr + kernel_shape.n * kernel_stride.n * sizeof(float), LOCAL_MEM_SIZE);
+
+        OKKERNEL_ASSERT(kernel_addr + kernel_shape.n * kernel_stride.n * sizeof(float) < LOCAL_MEM_SIZE);
+
+        int single_input_tensor_size = input_shape.c * input_shape.h * input_shape.w * sizeof(float);
+        int single_output_tensor_size = output_shape.c * output_shape.h * output_shape.w * sizeof(float);
+
+        okk_gdma_32bit_cpy_S2L(kernel_addr, param->kernel_addr, &kernel_shape, &kernel_stride, NULL);
+
+        int temp_N = 0, now_N = max_N;
+        while(temp_N < param->N)
+        {
+            now_N = max_N;
+            if(temp_N + now_N > param->N)
+            {
+                now_N = param->N - temp_N;
+            }
+
+            input_shape.n = now_N;
+            output_shape.n = now_N;
+
+            long input_offset = temp_N * single_input_tensor_size;
+            long output_offset = temp_N * single_output_tensor_size;
+
+            OKKERNEL_LOG("input offset:%d, output offset:%d\n", input_offset, output_offset);
+
+            OKKERNEL_LOG("input shape:[%d, %d, %d, %d], stride:[%d, %d, %d, %d]\n", input_shape.n, input_shape.c, input_shape.h, input_shape.w, input_stride.n, input_stride.c, input_stride.h, input_stride.w);
+
+            OKKERNEL_LOG("output shape:[%d, %d, %d, %d], stride:[%d, %d, %d, %d]\n", output_shape.n, output_shape.c, output_shape.h, output_shape.w, output_stride.n, output_stride.c, output_stride.h, output_stride.w);
+
+            okk_gdma_32bit_cpy_S2L(input_addr, param->input_addr + input_offset, &input_shape, NO_USE, NO_USE);
+
+            Padding padding = {
+                .left=param->pad_left, .right=param->pad_right,
+                .top=param->pad_top, .bottom=param->pad_bottom
+            };
+            dim2 stride = {.h = param->stride_h, .w = param->stride_w};
+            dim2 dilation = {.h = param->dilation_h, .w = param->dilation_w};
+            dim4 kernel_shape_2IC = {.n = IC_new, .c = param->OC, .h = param->kernel_h, .w = param->kernel_w};
+            dim4 kernel_stride_2IC;
+            okk_compact_stride(&kernel_stride_2IC, 0, &kernel_shape_2IC);
+
+            okk_bdc_conv2d(output_addr, input_addr, kernel_addr, NO_USE, &input_shape, param->OC, param->kernel_h, param->kernel_w, &input_stride, &kernel_stride_2IC, false, false, &padding, &stride, &dilation);
+            
+            okk_gdma_32bit_cpy_L2S(param->output_addr + output_offset, output_addr, &output_shape, NO_USE, NO_USE);
+
+            // okk_gdma_32bit_cpy_L2S(param->output_addr + output_offset, input_addr, &input_shape, NO_USE, &input_stride);
+            
+            temp_N += now_N;
+
+            okk_poll();
+        }
+
+        okk_poll();
+        return;
+    }
+
+
+
     // cal max H*W
     int input_channel_per_npu = DIV_UP(param->IC, NPU_NUM);
     int output_channel_per_npu = DIV_UP(param->OC, NPU_NUM);
-    long kernel_size = kernel_shape.n * kernel_stride.n * sizeof(float);
     long output_size = output_shape.n * output_stride.n * sizeof(float);
     long max_HW = ((LOCAL_MEM_SIZE - kernel_size) / (input_shape.n * input_channel_per_npu * sizeof(float) + output_shape.n * output_channel_per_npu * sizeof(float))) / 32 * 32;
 
-    OKKERNEL_LOG("rest size:%d\n", LOCAL_MEM_SIZE - kernel_size);
-    OKKERNEL_LOG("max HW:%ld\n", max_HW);
+    // OKKERNEL_LOG("rest size:%d\n", LOCAL_MEM_SIZE - kernel_size);
+    // OKKERNEL_LOG("max HW:%ld\n", max_HW);
     
     // TODO avoid overflow by data overlap
     int patches = DIV_UP(param->H * param->W, max_HW);
 
-    OKKERNEL_LOG("patches:%d\n", patches);
+    // OKKERNEL_LOG("patches:%d\n", patches);
+
+    // patches = 36;
 
     int row_patches = (int)sqrt(patches);
     int col_patches = DIV_UP(patches, row_patches);
 
-    OKKERNEL_LOG("row patch:%d, col patch:%d\n", row_patches, col_patches);
+    // OKKERNEL_LOG("row patch:%d, col patch:%d\n", row_patches, col_patches);
 
-    int patch_row_iter_size = output_shape.h / row_patches;
-    int patch_col_iter_size = output_shape.w / col_patches;
+    int patch_row_iter_size = DIV_UP(output_shape.h, row_patches);
+    int patch_col_iter_size = DIV_UP(output_shape.w, col_patches);
 
     int patch_row = (patch_row_iter_size - 1) * param->stride_h + kernel_h_ext;
     int patch_col = (patch_col_iter_size - 1) * param->stride_w + kernel_w_ext;
+
+    // OKKERNEL_LOG("row iter per patch:%d, col:%d\n", patch_row_iter_size, patch_col_iter_size);
+    // OKKERNEL_LOG("row in patch:%d, col:%d\n", patch_row, patch_col);
 
     int temp_output_h = (patch_row + param->pad_top + param->pad_bottom - kernel_h_ext) / param->stride_h + 1;
     int temp_output_w = (patch_col + param->pad_left + param->pad_right - kernel_w_ext) / param->stride_w + 1;
@@ -92,27 +176,32 @@ void conv2d_contest(const void *args) {
         int patch_row = (patch_row_iter_size - 1) * param->stride_h + kernel_h_ext;
         if (row_p == 0)
             patch_row -= param->pad_top;
-        if (row_p == row_patches - 1)
-            patch_row -= param->pad_bottom;
+        // if (row_p == row_patches - 1)
+        //     patch_row -= param->pad_bottom;
+        if(row_p*patch_row_iter_size*param->stride_h + patch_row > param->pad_top + param->H)
+            patch_row -= (row_p*patch_row_iter_size*param->stride_h + patch_row) - (param->pad_top + param->H);
         
         for(int col_p = 0; col_p < col_patches; col_p++)
         {
 
-            OKKERNEL_LOG("patch idx:[%d, %d]\n", row_p, col_p);
+            // OKKERNEL_LOG("patch idx:[%d, %d]\n", row_p, col_p);
             
             int patch_col = (patch_col_iter_size - 1) * param->stride_w + kernel_w_ext;
 
             // cal offset
             long input_offset = MAX((row_p*patch_row_iter_size*param->stride_h - param->pad_top) * param->W * (long)sizeof(float), 0) + MAX((col_p * patch_col_iter_size * param->stride_w - param->pad_left) * (long)sizeof(float), 0);
-            long output_offset = (row_p*patch_row_iter_size) * output_shape.w + col_p * patch_col_iter_size * sizeof(float);
+            long output_offset = (row_p*patch_row_iter_size) * output_shape.w * sizeof(float) + col_p * patch_col_iter_size * sizeof(float);
 
-            OKKERNEL_LOG("input offset:%d, output offset:%d\n", input_offset, output_offset);
+            // OKKERNEL_LOG("%d, %d, %d, %d, %d", row_p, patch_row_iter_size, output_shape.w)
+            // OKKERNEL_LOG("input offset:%d, output offset:%d\n", input_offset, output_offset);
 
             // cal temp patch H&W
             if(col_p == 0)
                 patch_col -= param->pad_left;
-            if(col_p == col_patches - 1)
-                patch_col -= param->pad_right;
+            // if(col_p == col_patches - 1)
+            //     patch_col -= param->pad_right;
+            if(col_p*patch_col_iter_size*param->stride_w + patch_col > param->pad_left + param->W)
+                patch_col -= (col_p*patch_col_iter_size*param->stride_w + patch_col) - (param->pad_left + param->W);
 
             Padding padding = {
                 .left=(col_p==0)?param->pad_left:0, .right=(col_p==col_patches-1)?param->pad_right:0,
@@ -140,9 +229,9 @@ void conv2d_contest(const void *args) {
             dim4 kernel_stride_2IC;
             okk_compact_stride(&kernel_stride_2IC, 0, &kernel_shape_2IC);
 
-            OKKERNEL_LOG("input shape:[%d, %d, %d, %d], stride: [%d, %d, %d, %d]\n", patch_input_shape.n, patch_input_shape.c, patch_input_shape.h, patch_input_shape.w, patch_input_stride.n, patch_input_stride.c, patch_input_stride.h, patch_input_stride.w);
-            OKKERNEL_LOG("output shape:[%d, %d, %d, %d], stride: [%d, %d, %d, %d]\n", patch_output_shape.n ,patch_output_shape.c, patch_output_shape.h, patch_output_shape.w, patch_output_stride.n, patch_output_stride.c, patch_output_stride.h, patch_output_stride.w);
-            OKKERNEL_LOG("padding: [%d, %d, %d, %d]\n", padding.left, padding.right, padding.top, padding.bottom);
+            // OKKERNEL_LOG("input shape:[%d, %d, %d, %d], stride: [%d, %d, %d, %d]\n", patch_input_shape.n, patch_input_shape.c, patch_input_shape.h, patch_input_shape.w, patch_input_stride.n, patch_input_stride.c, patch_input_stride.h, patch_input_stride.w);
+            // OKKERNEL_LOG("output shape:[%d, %d, %d, %d], stride: [%d, %d, %d, %d]\n", patch_output_shape.n ,patch_output_shape.c, patch_output_shape.h, patch_output_shape.w, patch_output_stride.n, patch_output_stride.c, patch_output_stride.h, patch_output_stride.w);
+            // OKKERNEL_LOG("padding: [%d, %d, %d, %d]\n", padding.left, padding.right, padding.top, padding.bottom);
 
             // x32 C = {1.0};
             // okk_bdc_32bit_set_C(kernel_addr, C, &kernel_shape, &kernel_stride);
@@ -154,9 +243,18 @@ void conv2d_contest(const void *args) {
             // okk_gdma_32bit_cpy_L2S(param->output_addr+output_offset, input_addr, &patch_input_shape, &system_output_stride, &patch_input_stride);
             // okk_gdma_32bit_cpy_L2S(param->output_addr+output_offset, kernel_addr, &kernel_shape, &system_output_stride, &kernel_stride);
 
-            break;
+            // if(row_p == 1)
+            // {
+            //     okk_gdma_32bit_cpy_L2S(param->output_addr+32, output_addr, &patch_output_shape, &system_output_stride, NO_USE);
+
+            //     // okk_gdma_32bit_cpy_L2S(param->output_addr, input_addr, &patch_input_shape, &system_output_stride, &patch_input_stride);
+            //     // okk_gdma_32bit_cpy_L2S(param->output_addr, kernel_addr, &kernel_shape, &system_output_stride, &kernel_stride);
+            //     break;
+            // }
+
+            // break;
         }
-        break;
+        // break;
     }
 
     // int seen_input_row = 0, seen_input_col = 0;
