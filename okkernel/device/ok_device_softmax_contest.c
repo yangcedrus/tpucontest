@@ -89,6 +89,23 @@ void softmax_contest(const void *args) {
         exp_addr = input_addr + shape.n * stride.n * sizeof(float);
         output_addr = exp_addr + shape.n * stride.n * sizeof(float);
 
+        int local_offset = 0;
+        int sys_offset = 0;
+
+        dim4 new_shape = {.n=shape.n, .c=shape.c, .h=1, .w=shape.w};
+
+        // okk_parallel_start();
+
+        // for(int i=0; i<param->H; i++)
+        // {
+        //     local_offset = i * param->W * sizeof(float);
+        //     sys_offset = local_offset;
+
+        //     okk_gdma_32bit_cpy_S2L(input_addr + local_offset, param->input_addr + sys_offset, &new_shape, &stride, &sys_stride);
+        // }
+
+        // okk_parallel_end();
+
         okk_gdma_32bit_cpy_S2L(input_addr, param->input_addr, &shape, NO_USE, &sys_stride);
 
         conduct_softmax(input_addr, exp_addr, output_addr, shape, stride);
