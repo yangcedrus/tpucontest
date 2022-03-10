@@ -35,26 +35,12 @@ void depthwise_contest(const void *args) {
     okk_128_byte_aligned_stride_for_32bit(&input_stride, 0, &input_shape);
     okk_compact_stride(&kernel_stride, 0, &kernel_shape);
 
-    // output is 64-byte aligned layout
-    // local_addr_t output_addr = 0;
-    // okk_128_byte_aligned_stride_for_32bit(&output_stride, 0, &output_shape);
-    // // input is 64-byte aligned layout
-    // local_addr_t input_addr = output_addr + output_shape.n * output_stride.n * sizeof(float);
-    // okk_128_byte_aligned_stride_for_32bit(&input_stride, 0, &input_shape);
-    // // kernel is compact layout
-    // local_addr_t kernel_addr = input_addr + input_shape.n * input_stride.n * sizeof(float);
-    // okk_compact_stride(&kernel_stride, 0, &kernel_shape);
-    // check local memory exceeded
     int kernel_size = kernel_shape.n * kernel_stride.n * sizeof(float);
     int max_N = (LOCAL_MEM_SIZE - kernel_size) / ((input_stride.n + output_stride.n)*sizeof(float));
 
     max_N = MIN(max_N, param->N);
 
-    // OKKERNEL_LOG("max_N:%d\n", max_N);
-
-    // OKKERNEL_ASSERT(max_N > 0);
-
-    if(max_N >=2)
+    if(max_N > 1)
     {
         max_N /= 2;
 
@@ -66,9 +52,6 @@ void depthwise_contest(const void *args) {
         input_addr[1] = output_addr[1] + max_N * output_stride.n * sizeof(float);
 
         kernel_addr = input_addr[1] + max_N * input_stride.n * sizeof(float);
-
-        OKKERNEL_ASSERT(output_addr[1] % 128 == 0);
-        OKKERNEL_ASSERT(kernel_addr + kernel_shape.n * kernel_stride.n * sizeof(float) <= LOCAL_MEM_SIZE);
 
         okk_gdma_32bit_cpy_S2L(kernel_addr, param->kernel_addr, &kernel_shape, &kernel_stride, NO_USE);
 
@@ -100,12 +83,7 @@ void depthwise_contest(const void *args) {
                 okk_gdma_32bit_cpy_L2S(param->output_addr + (i-2)*output_tensor_size_global, output_addr[i%2], i == iteration+1? &output_shape_last:&new_output_shape, NO_USE, NO_USE);
             
             okk_parallel_end();
-
-            // if(i==3)
-            //     break;
         }
-        // okk_gdma_32bit_cpy_L2S(param->output_addr, output_addr[1], &new_output_shape, NO_USE, NO_USE);
-        // okk_gdma_32bit_cpy_L2S(param->output_addr, kernel_addr, &kernel_shape, NO_USE, &kernel_stride);
     }else
     {
         local_addr_t input_addr, kernel_addr, output_addr;

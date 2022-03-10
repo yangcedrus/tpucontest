@@ -46,7 +46,10 @@ void matmul_contest(const void *args) {
     else
         max_left_row = ((long int)LOCAL_MEM_SIZE - right_size) / ((left_stride.n + output_stride.n) * (int)sizeof(float));
 
-    // OKKERNEL_LOG("max_N:%d\n", max_N);
+    // OKKERNEL_LOG("max_left_row:%d\n", max_left_row);
+
+    // okk_poll();
+    // return;
 
     if(max_left_row >= 2)
     {
@@ -82,7 +85,7 @@ void matmul_contest(const void *args) {
             temp_left_row += max_left_row;
         }
     }else{
-        int max_left_col = MIN(4096, param->left_cols);
+        int max_left_col = MIN(1024, param->left_cols);
         int max_right_col = MIN(2048, param->right_cols);
 
         left_cols_per_channel = DIV_UP(max_left_col, NPU_NUM);
