@@ -37,9 +37,6 @@ void matmul_contest(const void *args) {
     int right_size = right_shape.n * right_stride.n * sizeof(float);
     // int output_size = output_shape.n * output_stride.n * sizeof(float);
 
-    local_addr_t left_addr, right_addr, output_addr;
-    left_addr = 0;
-
     int max_left_row = 0;
     if ((long int)LOCAL_MEM_SIZE - right_size < 0)
         max_left_row = -1;
@@ -51,40 +48,73 @@ void matmul_contest(const void *args) {
     // okk_poll();
     // return;
 
-    if(max_left_row >= 2)
+    if(max_left_row > 1)
     {
-        int temp_left_row = 0;
+        max_left_row /= 2;
 
-        left_shape.n = max_left_row;
-        output_shape.n = max_left_row;
+        local_addr_t left_addr[2], right_addr, output_addr[2];
+        left_addr[0] = 0;
+        output_addr[0] = left_addr[0] + max_left_row * left_stride.n * sizeof(float);
 
-        right_addr = left_addr + left_shape.n * left_stride.n * sizeof(float);
-        output_addr = right_addr + right_shape.n * right_stride.n * sizeof(float);
+        left_addr[1] = output_addr[0] + max_left_row * right_stride.n * sizeof(float);
+        output_addr[1] = left_addr[1] + max_left_row * left_stride.n * sizeof(float);
+
+        right_addr = output_addr[1] + max_left_row * right_stride.n * sizeof(float);
 
         okk_gdma_32bit_matrix_S2L(right_addr, param->right_addr, param->left_cols, param->right_cols, right_cols_per_channel, param->right_cols);
 
-        while(temp_left_row < param->left_rows)
-        {
-            if(temp_left_row + max_left_row > param->left_rows)
-            {
-                max_left_row = param->left_rows - temp_left_row;
+        int iteration = DIV_UP(param->left_rows, max_left_row);
 
-                left_shape.n = max_left_row;
-                output_shape.n = max_left_row;
-            }
+        // dim4 new_left_shape = {.n=max_left_row, .c=left_shape.c, .h=left_shape.h, .w=left_shape.w};
+        // dim4 new_output_shape = {.n=max_left_row, .c=output_shape.c, .h=output_shape.h, .w=output_shape.w};
 
-            int sys_left_offset = temp_left_row * param->left_cols * sizeof(float);
-            int sys_output_offset = temp_left_row * param->right_cols * sizeof(float);
+        unsigned int left_tensor_size_global = max_left_row * param->left_cols * sizeof(float);
+        unsigned int output_tensor_size_global = max_left_row * param->right_cols * sizeof(float);
 
-            okk_gdma_32bit_matrix_S2L(left_addr, param->left_addr + sys_left_offset, max_left_row, param->left_cols, left_cols_per_channel, param->left_cols);
+        // dim4 left_shape_last = {.n=param->left_rows - (iteration - 1)*max_left_row, .c=left_shape.c, .h=left_shape.h, .w=left_shape.w};
+        // dim4 output_shape_last = {.n=left_shape_last.n, output_shape.c, output_shape.h, output_shape.w};
 
-            okk_bdc_matmul(output_addr, left_addr, right_addr, NO_USE, max_left_row, param->left_cols, param->right_cols, left_cols_per_channel, right_cols_per_channel, false, false);
+        int last_left_row = param->left_rows - (iteration - 1) * max_left_row;
 
-            okk_gdma_32bit_matrix_L2S(param->output_addr + sys_output_offset, output_addr, max_left_row, param->right_cols, right_cols_per_channel, param->right_cols);
+        for(int i = 0; i<iteration + 2; i++){
+            okk_parallel_start();
 
-            temp_left_row += max_left_row;
+            if(i < iteration)
+                okk_gdma_32bit_matrix_S2L(left_addr[i%2], param->left_addr + i * left_tensor_size_global, i==iteration-1?last_left_row:max_left_row, param->left_cols, left_cols_per_channel, param->left_cols);
+            
+            if(i>0 && i<iteration + 1)
+                okk_bdc_matmul(output_addr[(i-1)%2], left_addr[(i-1)%2], right_addr, NO_USE, i==iteration?last_left_row:max_left_row, param->left_cols, param->right_cols, left_cols_per_channel, right_cols_per_channel, false, false);
+
+            if(i>1)
+                okk_gdma_32bit_matrix_L2S(param->output_addr + (i-2)*output_tensor_size_global, output_addr[i%2], i==iteration+1?last_left_row:max_left_row, param->right_cols, right_cols_per_channel, param->right_cols);
+            
+            okk_parallel_end();
         }
+        // while(temp_left_row < param->left_rows)
+        // {
+        //     if(temp_left_row + max_left_row > param->left_rows)
+        //     {
+        //         max_left_row = param->left_rows - temp_left_row;
+
+        //         left_shape.n = max_left_row;
+        //         output_shape.n = max_left_row;
+        //     }
+
+        //     int sys_left_offset = temp_left_row * param->left_cols * sizeof(float);
+        //     int sys_output_offset = temp_left_row * param->right_cols * sizeof(float);
+
+        //     okk_gdma_32bit_matrix_S2L(left_addr, param->left_addr + sys_left_offset, max_left_row, param->left_cols, left_cols_per_channel, param->left_cols);
+
+        //     okk_bdc_matmul(output_addr, left_addr, right_addr, NO_USE, max_left_row, param->left_cols, param->right_cols, left_cols_per_channel, right_cols_per_channel, false, false);
+
+        //     okk_gdma_32bit_matrix_L2S(param->output_addr + sys_output_offset, output_addr, max_left_row, param->right_cols, right_cols_per_channel, param->right_cols);
+
+        //     temp_left_row += max_left_row;
+        // }
     }else{
+        local_addr_t left_addr, right_addr, output_addr;
+        left_addr = 0;
+
         int max_left_col = MIN(1024, param->left_cols);
         int max_right_col = MIN(2048, param->right_cols);
 
