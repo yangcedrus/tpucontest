@@ -1,5 +1,4 @@
 #include "okk.h"
-#include "math.h"
 #ifndef NULL
 #define NULL 0
 #endif
