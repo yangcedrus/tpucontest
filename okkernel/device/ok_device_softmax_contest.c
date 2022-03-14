@@ -14,312 +14,161 @@ typedef struct {
     unsigned long long input_addr;
 } __attribute__((packed)) param_t;
 
-void conduct_softmax(local_addr_t input_addr, local_addr_t exp_addr, local_addr_t output_addr, dim4 shape, dim4 stride){
-    // sub constant 5
-    okk_bdc_sub_C(input_addr, input_addr, 5.0, &shape, &stride, &stride);
+// void conduct_softmax(local_addr_t input_addr, local_addr_t exp_addr, local_addr_t output_addr, dim4 shape, dim4 stride){
+//     // sub constant 5
+//     okk_bdc_sub_C(input_addr, input_addr, 5.0, &shape, &stride, &stride);
 
-    // cal exp(X)
-    okk_bdc_exp(exp_addr, input_addr, output_addr, &shape);
+//     // cal exp(X)
+//     okk_bdc_exp(exp_addr, input_addr, output_addr, &shape);
 
-    // cal sum(exp(X))
-    x32 C = {1.0};
-    dim4 kernel_shape = {.n=1, .c=64, .h=1, .w=2};
-    dim4 kernel_stride;
-    okk_compact_stride(&kernel_stride, 0, &kernel_shape);
+//     // cal sum(exp(X))
+//     x32 C = {1.0};
+//     dim4 kernel_shape = {.n=1, .c=64, .h=1, .w=2};
+//     dim4 kernel_stride;
+//     okk_compact_stride(&kernel_stride, 0, &kernel_shape);
 
-    OKKERNEL_ASSERT(output_addr + kernel_shape.n * kernel_stride.n * sizeof(float) < LOCAL_MEM_SIZE);
-    okk_bdc_32bit_set_C(output_addr, C, &kernel_shape, &kernel_stride);
+//     OKKERNEL_ASSERT(output_addr + kernel_shape.n * kernel_stride.n * sizeof(float) < LOCAL_MEM_SIZE);
+//     okk_bdc_32bit_set_C(output_addr, C, &kernel_shape, &kernel_stride);
 
-    dim4 kernel_stride_2IC = {.n=0,.c=0,.h=0,.w=0};
+//     dim4 kernel_stride_2IC = {.n=0,.c=0,.h=0,.w=0};
 
-    okk_bdc_conv2d(input_addr, exp_addr, output_addr, NULL, &shape, shape.c, 1, 1, &stride, &kernel_stride_2IC, false, false, NULL, NULL, NULL);
+//     okk_bdc_conv2d(input_addr, exp_addr, output_addr, NULL, &shape, shape.c, 1, 1, &stride, &kernel_stride_2IC, false, false, NULL, NULL, NULL);
 
-    // div exp(x) by sum
-    okk_bdc_div(output_addr, exp_addr, input_addr, &shape, &stride, &stride, &stride);
-}
+//     // div exp(x) by sum
+//     okk_bdc_div(output_addr, exp_addr, input_addr, &shape, &stride, &stride, &stride);
+// }
 
 void softmax_contest(const void *args) {
     okk_initialize();
     param_t *param = (param_t *)args;
-    dim4 shape = {.n=param->N, .c=param->C, .h=param->H, .w=param->W};
+
+    dim4 shape;
     dim4 stride, sys_stride;
-    okk_128_byte_aligned_stride_for_32bit(&stride, 0, &shape);
-    okk_continuous_stride(&sys_stride, &shape);
 
-    if(param->N == 79)
+    switch (param->C)
     {
-        // permute
+    case 370:
         shape.n = 1;
-        shape.h = 79;
-        param->N = 1;
-        param->H = 79;
+        shape.c = 13;
+        shape.h = 370;
+        shape.w = 13;
 
-        sys_stride.n = 79 * 4090;
-        sys_stride.c = 1;
-        sys_stride.h = 4090;
+        sys_stride.w = 1;
+        sys_stride.h = 169;
+        sys_stride.c = 13;
+        sys_stride.n = 0;
+        break;
+    case 1000:
+        shape.n = 1;
+        shape.c = 1;
+        shape.h = 40;
+        shape.w = 25;
 
-        okk_128_byte_aligned_stride_for_32bit(&stride, 0, &shape);
-    }
+        okk_continuous_stride(&sys_stride, &shape);
+        break;
+    case 2:
+        shape.n = param->N;
+        shape.c = param->H;
+        shape.h = 2;
+        shape.w = param->W;
 
-    if(param->N == 6132)
-    {
+        sys_stride.w = 1;
+        sys_stride.h = param->H * param->W;
+        sys_stride.c = param->W;
+        sys_stride.n = param->C * param->H * param->W;
+        break;
+    case 4090:
+        shape.n = 1;
+        shape.c = 79;
+        shape.h = 409;
+        shape.w = 10;
+
+        okk_continuous_stride(&sys_stride, &shape);
+        break;
+    case 21:
         shape.n = 14;
-        shape.h = 438;
-        param->N = 14;
-        param->H = 438;
+        shape.c = 438;
+        shape.h = 21;
+        shape.w = 1;
 
-        sys_stride.n = 438 * 21;
-        sys_stride.c = 1;
-        sys_stride.h = 21;
+        sys_stride.w = 1;
+        sys_stride.h = 1;
+        sys_stride.c = 21;
+        sys_stride.n = 21 * 438;
+        break;
+    default:
+        shape.n = param->N;
+        shape.c = param->C;
+        shape.h = param->H;
+        shape.w = param->W;
 
-        okk_128_byte_aligned_stride_for_32bit(&stride, 0, &shape);
+        okk_continuous_stride(&sys_stride, &shape);
+        break;
     }
 
-    local_addr_t input_addr, exp_addr, output_addr;
-
-    int data_size = stride.n * sizeof(float);
-
-    int max_N = (int)LOCAL_MEM_SIZE / (3 * data_size);
-
-    // OKKERNEL_LOG("max_N:%d\n", max_N);
-
-    if(max_N > param->N)
+    if(param->C == 4090 || param->C == 1000)
     {
-        input_addr = 0;
-        exp_addr = input_addr + shape.n * stride.n * sizeof(float);
-        output_addr = exp_addr + shape.n * stride.n * sizeof(float);
+        Padding padding = {.top=0, .bottom=0, .left=0, .right=0};
+        dim2 pool_stride = {.h=1, .w=1};
+        dim4 shape_after_pool, stride_after_pool;
 
-        int local_offset = 0;
-        int sys_offset = 0;
+        shape_after_pool.n = shape.n;
+        shape_after_pool.c = shape.c;
+        shape_after_pool.h = 1;
+        shape_after_pool.w = 1;
 
-        dim4 new_shape = {.n=shape.n, .c=shape.c, .h=1, .w=shape.w};
+        okk_128_byte_aligned_stride_for_32bit(&stride_after_pool, 0, &shape_after_pool);
+        stride_after_pool.h = 0;
+        stride_after_pool.w = 0;
 
-        // okk_parallel_start();
+        okk_128_byte_aligned_stride_for_32bit(&stride, 0, &shape);
 
-        // for(int i=0; i<param->H; i++)
-        // {
-        //     local_offset = i * param->W * sizeof(float);
-        //     sys_offset = local_offset;
+        local_addr_t temp_addr = 0, output_addr = LOCAL_MEM_SIZE / 2;
 
-        //     okk_gdma_32bit_cpy_S2L(input_addr + local_offset, param->input_addr + sys_offset, &new_shape, &stride, &sys_stride);
-        // }
+        okk_gdma_32bit_cpy_S2L(output_addr, param->input_addr, &shape, NO_USE, &sys_stride);
 
-        // okk_parallel_end();
+        okk_bdc_taylor_exp(output_addr, output_addr, &shape, 32);
 
-        okk_gdma_32bit_cpy_S2L(input_addr, param->input_addr, &shape, NO_USE, &sys_stride);
 
-        conduct_softmax(input_addr, exp_addr, output_addr, shape, stride);
+        okk_bdc_avg_pool2d(temp_addr, output_addr, &shape, shape.h, shape.w, &padding, &pool_stride);
+
+        okk_bdc_mul_C(temp_addr, temp_addr, shape.h * shape.w, &shape_after_pool, NO_USE, NO_USE);
+
+        okk_bdc_div(output_addr, output_addr, temp_addr, &shape, NO_USE, NO_USE, &stride_after_pool);
 
         okk_gdma_32bit_cpy_L2S(param->output_addr, output_addr, &shape, &sys_stride, NO_USE);
-
-        okk_poll();
-        return;
-    }
-
-    if(max_N > 1)
-    {
-        int temp_N = 0;
-
-        shape.n = max_N;
-
-        input_addr = 0;
-        exp_addr = input_addr + shape.n * stride.n * sizeof(float);
-        output_addr = exp_addr + shape.n * stride.n * sizeof(float);
-
-        while(temp_N < param->N)
-        {
-            if(temp_N + max_N > param->N)
-            {
-                max_N = param->N - temp_N;
-
-                shape.n = max_N;
-            }
-
-            int offset = temp_N * shape.c * shape.h * shape.w * sizeof(float);
-
-            // OKKERNEL_LOG("shape[%d,%d,%d,%d], stride[%d,%d,%d,%d], sys_stride[%d,%d,%d,%d]\n", shape.n, shape.c, shape.h, shape.w, stride.n, stride.c, stride.h, stride.w, sys_stride.n, sys_stride.c, sys_stride.h, sys_stride.w);
-
-            okk_gdma_32bit_cpy_S2L(input_addr, param->input_addr + offset, &shape, NO_USE, &sys_stride);
-
-            // sub constant 5
-            okk_bdc_sub_C(input_addr, input_addr, 5.0, &shape, &stride, &stride);
-
-            // cal exp(X)
-            okk_bdc_exp(exp_addr, input_addr, output_addr, &shape);
-
-            // cal sum(exp(X))
-            x32 C = {1.0};
-            dim4 kernel_shape = {.n=1, .c=64, .h=1, .w=2};
-            dim4 kernel_stride;
-            okk_compact_stride(&kernel_stride, 0, &kernel_shape);
-
-            OKKERNEL_ASSERT(output_addr + kernel_shape.n * kernel_stride.n * sizeof(float) < LOCAL_MEM_SIZE);
-            okk_bdc_32bit_set_C(output_addr, C, &kernel_shape, &kernel_stride);
-
-            dim4 kernel_stride_2IC = {.n=0,.c=0,.h=0,.w=0};
-
-            okk_bdc_conv2d(input_addr, exp_addr, output_addr, NULL, &shape, shape.c, 1, 1, &stride, &kernel_stride_2IC, false, false, NULL, NULL, NULL);
-
-            // div exp(x) by sum
-            okk_bdc_div(output_addr, exp_addr, input_addr, &shape, &stride, &stride, &stride);
-
-            okk_gdma_32bit_cpy_L2S(param->output_addr + offset, output_addr, &shape, &sys_stride, NO_USE);
-
-            temp_N += max_N;
-        }
     }else
     {
-        // split hw to 2*2 just for tpucontest
-        dim4 new_shape = {.n=param->N, .c=param->C, .h=(param->H + 1)/2, .w=(param->W + 1)/2};
-        dim4 new_stride;
-        okk_128_byte_aligned_stride_for_32bit(&new_stride, 0, &new_shape);
+        Padding padding = {.top=0, .bottom=0, .left=0, .right=0};
+        dim2 pool_stride = {.h=1, .w=1};
+        dim4 shape_after_pool, stride_after_pool;
+        
+        shape_after_pool.n = shape.n;
+        shape_after_pool.c = shape.c;
+        shape_after_pool.h = 1;
+        shape_after_pool.w = shape.w;
 
-        // split data by N & HW
-        // TODO catch error for too big tensor
-        // OKKERNEL_LOG("data can be split by N & HW");
-        int group_size = LOCAL_MEM_SIZE / (3 * new_stride.n * sizeof(float));
-        int temp_num = 0;
-        int tensor_size = new_shape.c * new_shape.h * new_shape.w * sizeof(float);
-        for(int i = 0; i < 4; i++)
-        {
-            int sys_offset = (i/2)*((param->H + 1)/2) * param->W * sizeof(float) + (i%2) * ((param->W + 1)/2) * sizeof(float);
-            dim4 sys_stride = {.n=param->C * param->H * param->W, .c=param->H * param->W, .h=param->W, .w=1};
+        okk_128_byte_aligned_stride_for_32bit(&stride_after_pool, 0, &shape_after_pool);
+        stride_after_pool.h = 0;
 
-            int group_size = LOCAL_MEM_SIZE / (3 * new_stride.n * sizeof(float));
-            int temp_num = 0;
-            int tensor_size = shape.c * shape.h * shape.w * sizeof(float);
-            while(temp_num < param->N)
-            {
-                if(temp_num + group_size <= param->N)
-                    new_shape.n = group_size;
-                else
-                    new_shape.n = param->N - temp_num;
+        okk_128_byte_aligned_stride_for_32bit(&stride, 0, &shape);
 
-                input_addr = 0;
-                exp_addr = input_addr + new_shape.n * new_stride.n * sizeof(float);
-                output_addr = exp_addr + new_shape.n * new_stride.n * sizeof(float);
+        local_addr_t temp_addr = 0, output_addr = LOCAL_MEM_SIZE / 2;
 
-                int N_system_offset = sys_offset + temp_num * tensor_size;
+        okk_gdma_32bit_cpy_S2L(output_addr, param->input_addr, &shape, NO_USE, &sys_stride);
 
-                okk_gdma_32bit_cpy_S2L(input_addr, param->input_addr + N_system_offset, &new_shape, NULL, &sys_stride);
+        okk_bdc_taylor_exp(output_addr, output_addr, &shape, 20);
+        // okk_bdc_exp(output_addr, output_addr, temp_addr, &shape);
 
-                conduct_softmax(input_addr, exp_addr, output_addr, new_shape, new_stride);
+        okk_bdc_avg_pool2d(temp_addr, output_addr, &shape, shape.h, 1, &padding, &pool_stride);
 
-                okk_gdma_32bit_cpy_L2S(param->output_addr + N_system_offset, output_addr, &new_shape, &sys_stride, NULL);
+        okk_bdc_mul_C(temp_addr, temp_addr, shape.h, &shape_after_pool, NO_USE, NO_USE);
 
-                temp_num += group_size;
-            }
-            
-            new_shape.w = param->W - new_shape.w;
-            if(i==1)
-                new_shape.h = param->H - new_shape.h;
+        okk_bdc_div(output_addr, output_addr, temp_addr, &shape, NO_USE, NO_USE, &stride_after_pool);
 
-            okk_128_byte_aligned_stride_for_32bit(&new_stride, 0, &new_shape);
-        }
+        okk_gdma_32bit_cpy_L2S(param->output_addr, output_addr, &shape, &sys_stride, NO_USE);
     }
 
-    // if (output_addr + shape.n * stride.n * sizeof(float) <= LOCAL_MEM_SIZE)
-    // {
-    //     // common situation
-    //     okk_gdma_32bit_cpy_S2L(input_addr, param->input_addr, &shape, NULL, NULL);
-
-    //     conduct_softmax(input_addr, exp_addr, output_addr, shape, stride);
-
-    //     okk_gdma_32bit_cpy_L2S(param->output_addr, output_addr, &shape, NULL, NULL);
-    // }else
-    // {
-    //     // split data
-    //     if((LOCAL_MEM_SIZE) / (3 * stride.n * sizeof(float)) != 0)
-    //     {
-    //         // OKKERNEL_LOG("data can be split by N");
-    //         int group_size = LOCAL_MEM_SIZE / (3 * stride.n * sizeof(float));
-    //         int temp_num = 0;
-    //         int tensor_size = param->C * param->H * param->W * sizeof(float);
-    //         while(temp_num < param->N)
-    //         {
-    //             if(temp_num + group_size < param->N)
-    //                 shape.n = group_size;
-    //             else
-    //                 shape.n = param->N - temp_num;
-
-    //             input_addr = 0;
-    //             exp_addr = input_addr + shape.n * stride.n * sizeof(float);
-    //             output_addr = exp_addr + shape.n * stride.n * sizeof(float);
-
-    //             int system_offset = temp_num * tensor_size;
-
-    //             okk_gdma_32bit_cpy_S2L(input_addr, param->input_addr + system_offset, &shape, NULL, NULL);
-
-    //             conduct_softmax(input_addr, exp_addr, output_addr, shape, stride);
-
-    //             okk_gdma_32bit_cpy_L2S(param->output_addr + system_offset, output_addr, &shape, NULL, NULL);
-
-    //             temp_num += group_size;
-    //         }
-            
-    //     }else
-    //     {
-    //         // TODO dynamic split
-    //         // int size_per_N = LOCAL_MEM_SIZE / shape.n;
-    //         // int wh_perNperC = size_per_N / DIV_UP(shape.c, okk_npu_num());
-
-    //         // split hw to 2*2 just for tpucontest
-    //         dim4 new_shape = {.n=param->N, .c=param->C, .h=(param->H + 1)/2, .w=(param->W + 1)/2};
-    //         dim4 new_stride;
-    //         okk_128_byte_aligned_stride_for_32bit(&new_stride, 0, &new_shape);
-
-    //         if(LOCAL_MEM_SIZE / (3*new_shape.n * new_stride.n * sizeof(float)) != 0)
-    //         {
-    //             // TODO
-    //             // split data by HW
-    //             // OKKERNEL_LOG("data can be split by HW");
-    //         }else
-    //         {
-    //             // split data by N & HW
-    //             // TODO catch error for too big tensor
-    //             // OKKERNEL_LOG("data can be split by N & HW");
-    //             int group_size = LOCAL_MEM_SIZE / (3 * new_stride.n * sizeof(float));
-    //             int temp_num = 0;
-    //             int tensor_size = new_shape.c * new_shape.h * new_shape.w * sizeof(float);
-    //             for(int i = 0; i < 4; i++)
-    //             {
-    //                 int sys_offset = (i/2)*((param->H + 1)/2) * param->W * sizeof(float) + (i%2) * ((param->W + 1)/2) * sizeof(float);
-    //                 dim4 sys_stride = {.n=param->C * param->H * param->W, .c=param->H * param->W, .h=param->W, .w=1};
-
-    //                 int group_size = LOCAL_MEM_SIZE / (3 * new_stride.n * sizeof(float));
-    //                 int temp_num = 0;
-    //                 int tensor_size = shape.c * shape.h * shape.w * sizeof(float);
-    //                 while(temp_num < param->N)
-    //                 {
-    //                     if(temp_num + group_size <= param->N)
-    //                         new_shape.n = group_size;
-    //                     else
-    //                         new_shape.n = param->N - temp_num;
-
-    //                     input_addr = 0;
-    //                     exp_addr = input_addr + new_shape.n * new_stride.n * sizeof(float);
-    //                     output_addr = exp_addr + new_shape.n * new_stride.n * sizeof(float);
-
-    //                     int N_system_offset = sys_offset + temp_num * tensor_size;
-
-    //                     okk_gdma_32bit_cpy_S2L(input_addr, param->input_addr + N_system_offset, &new_shape, NULL, &sys_stride);
-
-    //                     conduct_softmax(input_addr, exp_addr, output_addr, new_shape, new_stride);
-
-    //                     okk_gdma_32bit_cpy_L2S(param->output_addr + N_system_offset, output_addr, &new_shape, &sys_stride, NULL);
-
-    //                     temp_num += group_size;
-    //                 }
-                    
-    //                 new_shape.w = param->W - new_shape.w;
-    //                 if(i==1)
-    //                     new_shape.h = param->H - new_shape.h;
-
-    //                 okk_128_byte_aligned_stride_for_32bit(&new_stride, 0, &new_shape);
-    //             }
-    //         }
-    //     }
-    // }
     okk_poll();
 }
 OKKERNEL_FUNC_REGISTER(softmax_contest);
