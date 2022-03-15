@@ -47,7 +47,7 @@ void matmul_contest(const void *args) {
     // okk_poll();
     // return;
 
-    if(max_left_row > 1)
+    if(max_left_row > 1 && param->left_cols != 3072)
     {
         max_left_row /= 2;
 
@@ -114,6 +114,8 @@ void matmul_contest(const void *args) {
             int left_col = MIN(1024, param->left_cols);
             if(param->left_cols == 100352 || param->left_cols == 25088 || param->left_cols == 9216 || param->left_cols == 4096)
                 left_col = 1;
+            if(param->left_cols == 3072)
+                left_col = 256;
             int output_size = output_shape.n * output_stride.n * sizeof(float);
 
             left_cols_per_channel = DIV_UP(left_col, NPU_NUM);
