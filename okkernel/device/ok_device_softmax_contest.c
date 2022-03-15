@@ -14,30 +14,6 @@ typedef struct {
     unsigned long long input_addr;
 } __attribute__((packed)) param_t;
 
-// void conduct_softmax(local_addr_t input_addr, local_addr_t exp_addr, local_addr_t output_addr, dim4 shape, dim4 stride){
-//     // sub constant 5
-//     okk_bdc_sub_C(input_addr, input_addr, 5.0, &shape, &stride, &stride);
-
-//     // cal exp(X)
-//     okk_bdc_exp(exp_addr, input_addr, output_addr, &shape);
-
-//     // cal sum(exp(X))
-//     x32 C = {1.0};
-//     dim4 kernel_shape = {.n=1, .c=64, .h=1, .w=2};
-//     dim4 kernel_stride;
-//     okk_compact_stride(&kernel_stride, 0, &kernel_shape);
-
-//     OKKERNEL_ASSERT(output_addr + kernel_shape.n * kernel_stride.n * sizeof(float) < LOCAL_MEM_SIZE);
-//     okk_bdc_32bit_set_C(output_addr, C, &kernel_shape, &kernel_stride);
-
-//     dim4 kernel_stride_2IC = {.n=0,.c=0,.h=0,.w=0};
-
-//     okk_bdc_conv2d(input_addr, exp_addr, output_addr, NULL, &shape, shape.c, 1, 1, &stride, &kernel_stride_2IC, false, false, NULL, NULL, NULL);
-
-//     // div exp(x) by sum
-//     okk_bdc_div(output_addr, exp_addr, input_addr, &shape, &stride, &stride, &stride);
-// }
-
 void softmax_contest(const void *args) {
     okk_initialize();
     param_t *param = (param_t *)args;
